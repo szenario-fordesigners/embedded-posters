@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
+  <!-- Penrose triangle, shaded like the Embedded Assets logo -->
+  <defs>
+    <linearGradient id="x" gradientUnits="userSpaceOnUse" x1="83.3" y1="933.0" x2="1000.0" y2="933.0"><stop offset=".14" stop-color="#fff"/><stop offset=".51" stop-color="#757575"/><stop offset="1" stop-color="#000"/></linearGradient>
+    <linearGradient id="y" gradientUnits="userSpaceOnUse" x1="416.7" y1="67.0" x2="-41.7" y2="860.8"><stop offset=".14" stop-color="#fff"/><stop offset=".51" stop-color="#757575"/><stop offset="1" stop-color="#000"/></linearGradient>
+    <linearGradient id="z" gradientUnits="userSpaceOnUse" x1="1000.0" y1="788.7" x2="541.7" y2="-5.2"><stop offset=".14" stop-color="#fff"/><stop offset=".51" stop-color="#757575"/><stop offset="1" stop-color="#000"/></linearGradient>
+  </defs>
+  <polygon fill="url(#x)" points="83.3,933.0 916.7,933.0 1000.0,788.7 333.3,788.7 500.0,500.0 416.7,355.7"/>
+  <polygon fill="url(#y)" points="0.0,788.7 83.3,933.0 416.7,355.7 583.3,644.3 750.0,644.3 416.7,67.0"/>
+  <polygon fill="url(#z)" points="416.7,67.0 750.0,644.3 416.7,644.3 333.3,788.7 1000.0,788.7 583.3,67.0"/>
+</svg>
