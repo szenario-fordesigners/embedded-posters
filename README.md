@@ -23,7 +23,7 @@
 <br />
 
 <div align="center"><strong>
-An add-on for <a href="https://plugins.craftcms.com/embeddedassets">Embedded Assets</a> by Spicy Web. Not made or supported by Spicy Web.
+An add-on for the great <a href="https://plugins.craftcms.com/embeddedassets">Embedded Assets</a> by Spicy Web. Not made or supported by Spicy Web.
 </strong></div>
 
 ## Why
