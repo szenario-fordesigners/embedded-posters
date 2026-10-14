@@ -14,7 +14,7 @@ use yii\console\ExitCode;
  * Fetches posters for existing embedded assets.
  *
  * Unlike resave/assets, this touches only JSON assets, so other plugins' save listeners stay quiet.
- * Posters whose image hasn't changed are left alone; posters outside the configured volume and folder are moved there.
+ * Posters whose image hasn't changed are left alone.
  *
  * @author szenario
  * @since 1.0.0
@@ -76,7 +76,7 @@ class FetchController extends Controller
             /** @var Asset $asset */
             $result = $posters->sync($asset);
             $color = match (true) {
-                in_array($result, [Posters::RESULT_FETCHED, Posters::RESULT_MOVED], true) => Console::FG_GREEN,
+                $result === Posters::RESULT_FETCHED => Console::FG_GREEN,
                 str_starts_with($result, 'failed') => Console::FG_RED,
                 default => Console::FG_GREY,
             };

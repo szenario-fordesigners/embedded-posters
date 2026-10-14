@@ -4,16 +4,15 @@ namespace szenario\craftembeddedposters;
 
 use Craft;
 use craft\base\Element;
-use craft\base\Model;
 use craft\base\Plugin;
 use craft\elements\Asset;
-use craft\events\ConfigEvent;
 use craft\events\DefineEagerLoadingMapEvent;
 use craft\events\ModelEvent;
-use craft\helpers\Queue;
+use craft\events\RegisterElementSourcesEvent;
+use craft\fs\Local;
+use craft\models\Volume;
 use craft\web\twig\variables\CraftVariable;
-use szenario\craftembeddedposters\jobs\MovePosters;
-use szenario\craftembeddedposters\models\Settings;
+use RuntimeException;
 use szenario\craftembeddedposters\services\Posters;
 use szenario\craftembeddedposters\variables\EmbeddedPostersVariable;
 use yii\base\Event;
@@ -23,7 +22,6 @@ use yii\base\Event;
  * without the visitor's browser contacting the provider.
  *
  * @method static EmbeddedPosters getInstance()
- * @method Settings getSettings()
  * @property-read Posters $posters
  * @author szenario
  * @copyright Studio Bendl OG
@@ -31,6 +29,14 @@ use yii\base\Event;
  */
 class EmbeddedPosters extends Plugin
 {
+    // Const Properties
+    // =========================================================================
+
+    /**
+     * Handle of the volume posters are stored in, and of the filesystem created with it.
+     */
+    public const VOLUME_HANDLE = 'embeddedPosters';
+
     // Public Properties
     // =========================================================================
 
@@ -38,11 +44,6 @@ class EmbeddedPosters extends Plugin
      * @var string
      */
     public string $schemaVersion = '1.0.0';
-
-    /**
-     * @var bool
-     */
-    public bool $hasCpSettings = true;
 
     // Public Methods
     // =========================================================================
@@ -80,22 +81,17 @@ class EmbeddedPosters extends Plugin
             }
         });
 
-        // fires for CP saves and for project config applied on deploy, in every environment
-        $queuedFor = null;
-        $moveOnChange = function(ConfigEvent $event) use (&$queuedFor) {
-            $location = fn(?array $settings) => [$settings['volume'] ?? null, $settings['folder'] ?? null];
-            $target = $location($event->newValue);
+        // editors never need to browse posters; the volume stays selectable in field settings
+        Event::on(Asset::class, Element::EVENT_REGISTER_SOURCES, function(RegisterElementSourcesEvent $event) {
+            $uid = Craft::$app->getVolumes()->getVolumeByHandle(self::VOLUME_HANDLE)?->uid;
 
-            // applying YAML fires this once per changed key; one job per new location is enough
-            if ($target !== $location($event->oldValue) && $target !== $queuedFor) {
-                // before the first save there is no old value; posters then sit in the default folder
-                Queue::push(new MovePosters(['oldFolder' => $event->oldValue['folder'] ?? (new Settings())->folder]));
-                $queuedFor = $target;
+            if ($event->context === 'settings' || $uid === null) {
+                return;
             }
-        };
-        Craft::$app->getProjectConfig()
-            ->onAdd('plugins.embedded-posters.settings', $moveOnChange)
-            ->onUpdate('plugins.embedded-posters.settings', $moveOnChange);
+
+            $key = "volume:$uid";
+            $event->sources = array_values(array_filter($event->sources, fn(array $source) => ($source['key'] ?? null) !== $key));
+        });
 
         // plugin enabled state is only reliable once every plugin has loaded
         Craft::$app->onInit(function() {
@@ -123,27 +119,52 @@ class EmbeddedPosters extends Plugin
     // =========================================================================
 
     /**
-     * @inheritdoc
+     * Creates the posters volume. Never fails the install: until the volume exists, embeds simply
+     * get no poster, and a warning says why.
      */
-    protected function createSettingsModel(): ?Model
+    protected function afterInstall(): void
     {
-        return new Settings();
-    }
+        $volumes = Craft::$app->getVolumes();
 
-    /**
-     * @inheritdoc
-     * @throws \Twig\Error\LoaderError
-     * @throws \Twig\Error\RuntimeError
-     * @throws \Twig\Error\SyntaxError
-     * @throws \yii\base\Exception
-     */
-    protected function settingsHtml(): ?string
-    {
-        return Craft::$app->getView()->renderTemplate('embedded-posters/_settings.twig', [
-            'settings' => $this->getSettings(),
-            // keys set in config/embedded-posters.php win over what's saved here
-            'config' => Craft::$app->getConfig()->getConfigFromFile('embedded-posters'),
-        ]);
+        // on deploy, the volume arrives through project config along with the install;
+        // a reinstall reuses the one the previous install left behind
+        if (
+            !Craft::$app->getConfig()->getGeneral()->allowAdminChanges ||
+            Craft::$app->getProjectConfig()->getIsApplyingExternalChanges() ||
+            $volumes->getVolumeByHandle(self::VOLUME_HANDLE)
+        ) {
+            return;
+        }
+
+        try {
+            $filesystems = Craft::$app->getFs();
+
+            if (!$filesystems->getFilesystemByHandle(self::VOLUME_HANDLE)) {
+                $fs = new Local([
+                    'name' => 'Embedded Posters',
+                    'handle' => self::VOLUME_HANDLE,
+                    'hasUrls' => true,
+                    'url' => '@web/embedded-posters',
+                    'path' => '@webroot/embedded-posters',
+                ]);
+
+                if (!$filesystems->saveFilesystem($fs)) {
+                    throw new RuntimeException('filesystem not saved: ' . implode('; ', $fs->getFirstErrors()));
+                }
+            }
+
+            $volume = new Volume([
+                'name' => 'Embedded Posters',
+                'handle' => self::VOLUME_HANDLE,
+                'fs' => self::VOLUME_HANDLE,
+            ]);
+
+            if (!$volumes->saveVolume($volume)) {
+                throw new RuntimeException('volume not saved: ' . implode('; ', $volume->getFirstErrors()));
+            }
+        } catch (\Throwable $e) {
+            Craft::warning("No poster volume created: {$e->getMessage()}", __METHOD__);
+        }
     }
 
     // Private Methods

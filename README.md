@@ -46,11 +46,11 @@ php craft plugin/install embedded-posters
 php craft embedded-posters/fetch
 ```
 
-The last command fetches posters for the embeds you already have.
+Installing creates the **Embedded Posters** volume (see [Storage](#storage)). The last command fetches posters for the embeds you already have.
 
 ## How it works
 
-- Saving an embed (including Embedded Assets' **Refresh** action) downloads its `image` and stores it as `{embed uid}.{ext}` in the `embed-posters` folder of the embed's volume. If the poster already exists, its file is replaced in place; if the image hasn't changed, nothing is touched.
+- Saving an embed (including Embedded Assets' **Refresh** action) downloads its `image` and stores it as `{embed uid}.{ext}` in the posters volume. If the poster already exists, its file is replaced in place; if the image hasn't changed, nothing is touched.
 - Deleting an embed deletes its poster. Restoring an embed from the trash restores its poster.
 - If an embed no longer has an image, its poster is deleted.
 - A failed download never fails the embed's save. It logs a warning, and the placeholder simply has no poster.
@@ -84,29 +84,15 @@ When the embeds sit behind a relation, for example an asset field on entries, ea
 
 The posters can also be eager-loaded explicitly with the `embeddedPoster` handle, for example `.with(['videos', 'videos.embeddedPoster'])`, and read with `asset.getEagerLoadedElements('embeddedPoster').one()`.
 
-## Configuration
+## Storage
 
-Go to **Settings → Plugins → Embedded Posters**:
+Posters live in the root of the **Embedded Posters** volume (handle `embeddedPosters`), which the plugin creates on install. Keeping them in a volume of their own keeps them out of editors' way. It also keeps them away from plugins that react to every new image asset, such as AI alt-text generators or image optimisers.
 
-- **Volume:** where posters are stored. The default is each embed's own volume.
-- **Folder:** a folder inside that volume. Empty means the volume root.
+The volume is hidden from the Assets index and asset pickers, for admins too. It stays visible in **Settings → Assets**.
 
-Changing either setting moves the existing posters there in a queue job, in every environment the change is deployed to. Nothing is downloaded again, and posters keep working while the job runs. A change made only in `config/embedded-posters.php` fires no event: run `php craft embedded-posters/fetch` afterwards, or let posters move as their embeds are saved.
+It starts out on a local filesystem at `@webroot/embedded-posters`, with the URL `@web/embedded-posters`. Keep that directory out of git and make sure it persists across deployments. To store posters elsewhere, for example on S3, change the volume's filesystem in **Settings → Assets**. Don't change the volume's handle: the plugin finds the volume by it.
 
-The settings are stored in project config. You can also set them in `config/embedded-posters.php`, which wins over the settings page:
-
-```php
-<?php
-
-return [
-    // Volume handle for posters. null (the default) stores each poster in its embed's own volume.
-    'volume' => null,
-    // Folder inside that volume. '' means the volume root.
-    'folder' => 'embed-posters',
-];
-```
-
-A dedicated volume keeps posters out of editors' way. It also keeps them away from plugins that react to every new image asset, such as AI alt-text generators or image optimisers, which would otherwise process every poster.
+The volume is created only where admin changes are allowed; other environments get it through project config. If it's missing, embeds get no poster and a warning is logged.
 
 ## Backfill
 
@@ -114,14 +100,12 @@ A dedicated volume keeps posters out of editors' way. It also keeps them away fr
 php craft embedded-posters/fetch [--volume=<handle>]
 ```
 
-Prints one line per JSON asset: `fetched`, `unchanged`, `moved`, `skipped (reason)` or `failed (reason)`. Unlike `resave/assets`, it doesn't re-save every asset, so other plugins' save listeners stay quiet.
+Prints one line per JSON asset: `fetched`, `unchanged`, `skipped (reason)` or `failed (reason)`. Unlike `resave/assets`, it doesn't re-save every asset, so other plugins' save listeners stay quiet.
 
 ## Not supported
 
 - GraphQL.
 - Control panel thumbnails: Embedded Assets still loads those from the provider.
-- Moving an embed to another volume while `volume` is `null`: its poster follows on the embed's next save or `fetch` run.
-- After a move triggered by a settings change, the old folder is deleted if nothing else is in it (no other files, no subfolders, nothing in the trash). Posters moved by `fetch` or by saving an embed leave their old folder in place.
 - Embedded Assets' Refresh saves a temporary copy of the embed and moves it to the trash afterwards. That copy gets a poster too, which goes to the trash with it.
 - Craft deletes an asset's file when it is deleted in the control panel, so such an embed (and its poster) can't be restored from the trash. Restoring only applies to embeds whose file Craft kept, for example after a folder deletion.
 

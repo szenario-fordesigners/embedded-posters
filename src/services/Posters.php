@@ -15,7 +15,6 @@ use spicyweb\embeddedassets\Plugin as EmbeddedAssets;
 use spicyweb\embeddedassets\Service as EmbeddedAssetsService;
 use szenario\craftembeddedposters\EmbeddedPosters;
 use szenario\craftembeddedposters\helpers\PosterSource;
-use szenario\craftembeddedposters\models\Settings;
 use yii\base\InvalidConfigException;
 
 /**
@@ -34,7 +33,6 @@ class Posters extends Component
 
     public const RESULT_FETCHED = 'fetched';
     public const RESULT_UNCHANGED = 'unchanged';
-    public const RESULT_MOVED = 'moved';
 
     /**
      * Eager-loading handle for an embed's poster: `.with(['myAssetField.embeddedPoster'])`.
@@ -63,8 +61,7 @@ class Posters extends Component
      */
     public function poster(Asset $embed, bool $trashed = false): ?Asset
     {
-        // no volume or folder filter: the uid is unique, and posters keep working while a
-        // settings change moves them (see move())
+        // no volume filter: the uid is unique
         return Asset::find()
             ->filename($embed->uid . '.*')
             ->kind(Asset::KIND_IMAGE)
@@ -140,7 +137,7 @@ class Posters extends Component
      * means a plain placeholder, so it must never fail the embed's save.
      *
      * @param Asset $embed
-     * @return string `fetched`, `unchanged`, `moved`, `skipped (reason)` or `failed (reason)`
+     * @return string `fetched`, `unchanged`, `skipped (reason)` or `failed (reason)`
      */
     public function sync(Asset $embed): string
     {
@@ -165,7 +162,7 @@ class Posters extends Component
         }
 
         try {
-            $folder = $this->_folder($embed);
+            $folder = $this->_folder();
         } catch (\Throwable $e) {
             return $this->_fail($embed, $url, $e->getMessage());
         }
@@ -187,7 +184,6 @@ class Posters extends Component
             Image::cleanImageByPath($tempPath);
 
             if ($poster) {
-                $moved = $this->_moveTo($poster, $folder);
                 $titleChanged = $poster->title !== $this->_title($embed);
                 $poster->title = $this->_title($embed);
 
@@ -199,7 +195,7 @@ class Posters extends Component
                         return $this->_fail($embed, $url, 'title not saved');
                     }
 
-                    return $moved ? self::RESULT_MOVED : self::RESULT_UNCHANGED;
+                    return self::RESULT_UNCHANGED;
                 }
 
                 $poster->sanitizeOnUpload = false;
@@ -224,48 +220,6 @@ class Posters extends Component
         }
 
         return self::RESULT_FETCHED;
-    }
-
-    /**
-     * Moves an embed's poster to the configured volume and folder, without downloading anything.
-     *
-     * @param Asset $embed
-     * @return ?int The ID of the folder the poster was moved out of, or `null` if it didn't move.
-     * @throws \Throwable if the configured volume doesn't exist or the move fails
-     */
-    public function move(Asset $embed): ?int
-    {
-        $poster = $this->poster($embed);
-        $from = $poster?->folderId;
-
-        return $poster && $this->_moveTo($poster, $this->_folder($embed)) ? $from : null;
-    }
-
-    /**
-     * Deletes a folder that posters were moved out of, if it's now unused: not a volume root, no
-     * subfolders, and no assets at all, trashed ones included (deleting the folder would delete those).
-     *
-     * @param int $folderId
-     * @param string $path The `folder` setting the posters were moved away from.
-     * @return bool Whether the folder was deleted.
-     */
-    public function deleteEmptyFolder(int $folderId, string $path): bool
-    {
-        $assets = Craft::$app->getAssets();
-        $folder = $assets->getFolderById($folderId);
-
-        if (
-            !$folder ||
-            $folder->parentId === null ||
-            $folder->path !== trim($path, '/') . '/' ||
-            $assets->foldersExist(['parentId' => $folder->id]) ||
-            Asset::find()->folderId($folder->id)->trashed(null)->status(null)->site('*')->exists()
-        ) {
-            return false;
-        }
-
-        $assets->deleteFoldersByIds($folder->id);
-        return true;
     }
 
     /**
@@ -380,51 +334,20 @@ class Posters extends Component
     }
 
     /**
-     * The folder an embed's poster belongs in, created if needed.
+     * The root folder of the posters volume.
      *
-     * @param Asset $embed
      * @return VolumeFolder
-     * @throws InvalidConfigException if the configured volume doesn't exist
+     * @throws InvalidConfigException if the posters volume doesn't exist
      */
-    private function _folder(Asset $embed): VolumeFolder
+    private function _folder(): VolumeFolder
     {
-        $handle = $this->_settings()->volume;
-        $volume = $handle === null ? $embed->getVolume() : Craft::$app->getVolumes()->getVolumeByHandle($handle);
+        $volume = Craft::$app->getVolumes()->getVolumeByHandle(EmbeddedPosters::VOLUME_HANDLE);
 
         if (!$volume) {
-            throw new InvalidConfigException("volume \"$handle\" not found");
+            throw new InvalidConfigException('volume "' . EmbeddedPosters::VOLUME_HANDLE . '" not found');
         }
 
-        return Craft::$app->getAssets()->ensureFolderByFullPathAndVolume($this->_settings()->folder, $volume);
-    }
-
-    /**
-     * Moves a poster into a folder unless it's already there.
-     *
-     * @param Asset $poster
-     * @param VolumeFolder $folder
-     * @return bool Whether it moved.
-     * @throws RuntimeException if the move fails
-     */
-    private function _moveTo(Asset $poster, VolumeFolder $folder): bool
-    {
-        if ($poster->folderId === $folder->id) {
-            return false;
-        }
-
-        if (!Craft::$app->getAssets()->moveAsset($poster, $folder)) {
-            throw new RuntimeException('not moved: ' . implode('; ', $poster->getFirstErrors()));
-        }
-
-        return true;
-    }
-
-    /**
-     * @return Settings
-     */
-    private function _settings(): Settings
-    {
-        return EmbeddedPosters::getInstance()->getSettings();
+        return Craft::$app->getAssets()->getRootFolderByVolumeId($volume->id);
     }
 
     /**
