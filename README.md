@@ -1,5 +1,9 @@
+
+
 <br />
 <div align="center"><strong>Embedded Posters: embed artwork, served from your own domain</strong></div>
+<br />
+<div align="center"><img src="src/icon.svg" width="120" alt="Embedded Posters icon" /></div>
 
 <br />
 <div align="center"><strong>Local poster images for Embedded Assets embeds in Craft CMS.</strong></div>
