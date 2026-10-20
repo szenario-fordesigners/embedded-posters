@@ -2,7 +2,6 @@
 
 namespace szenario\craftembeddedposters\console\controllers;
 
-use Craft;
 use craft\console\Controller;
 use craft\elements\Asset;
 use craft\helpers\Console;
@@ -25,25 +24,12 @@ class FetchController extends Controller
     // =========================================================================
 
     /**
-     * @var ?string Handle of the volume to fetch for. Defaults to all volumes.
-     */
-    public ?string $volume = null;
-
-    /**
      * @var string
      */
     public $defaultAction = 'index';
 
     // Public Methods
     // =========================================================================
-
-    /**
-     * @inheritdoc
-     */
-    public function options($actionID): array
-    {
-        return [...parent::options($actionID), 'volume'];
-    }
 
     /**
      * Fetches the poster of every embedded asset and prints one line per JSON asset.
@@ -60,16 +46,6 @@ class FetchController extends Controller
         }
 
         $query = Asset::find()->kind(Asset::KIND_JSON);
-
-        if ($this->volume) {
-            if (!Craft::$app->getVolumes()->getVolumeByHandle($this->volume)) {
-                $this->stderr("No volume with the handle \"$this->volume\".\n", Console::FG_RED);
-                return ExitCode::USAGE;
-            }
-
-            $query->volume($this->volume);
-        }
-
         $failed = 0;
 
         foreach ($query->each() as $asset) {
