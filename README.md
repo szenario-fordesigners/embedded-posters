@@ -50,7 +50,15 @@ php craft plugin/install embedded-posters
 php craft embedded-posters/fetch
 ```
 
-Installing creates the **Embedded Posters** volume (see [Storage](#storage)). The last command fetches posters for the embeds you already have.
+Installing creates the **Embedded Posters** volume (see [Storage](#storage)). The last command fetches posters for the embeds you already have (see [Backfill](#backfill)).
+
+## Backfill
+
+```bash
+php craft embedded-posters/fetch
+```
+
+Goes through the embeds in every volume and prints one line per JSON asset: `fetched`, `unchanged`, `skipped (reason)` or `failed (reason)`. Unlike `resave/assets`, it doesn't re-save every asset, so other plugins' save listeners stay quiet.
 
 ## How it works
 
@@ -92,19 +100,11 @@ The posters can also be eager-loaded explicitly with the `embeddedPoster` handle
 
 Posters live in the root of the **Embedded Posters** volume (handle `embeddedPosters`), which the plugin creates on install. Keeping them in a volume of their own keeps them out of editors' way. It also keeps them away from plugins that react to every new image asset, such as AI alt-text generators or image optimisers.
 
-The volume is hidden from the Assets index and asset pickers, for admins too. It stays visible in **Settings → Assets**.
+The volume is hidden from the Assets index and asset pickers, for admins too. It stays visible in **Settings → Assets** and in asset field settings.
 
 It starts out on a local filesystem at `@webroot/embedded-posters`, with the URL `@web/embedded-posters`. Keep that directory out of git and make sure it persists across deployments. To store posters elsewhere, for example on S3, change the volume's filesystem in **Settings → Assets**. Don't change the volume's handle: the plugin finds the volume by it.
 
 The volume is created only where admin changes are allowed; other environments get it through project config. If it's missing, embeds get no poster and a warning is logged.
-
-## Backfill
-
-```bash
-php craft embedded-posters/fetch [--volume=<handle>]
-```
-
-Prints one line per JSON asset: `fetched`, `unchanged`, `skipped (reason)` or `failed (reason)`. Unlike `resave/assets`, it doesn't re-save every asset, so other plugins' save listeners stay quiet.
 
 ## Not supported
 
